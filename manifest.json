@@ -1,0 +1,23 @@
+{
+  "name": "Teacher Grading Book",
+  "short_name": "Grading Book",
+  "description": "App docente offline: grupos, actividades, calificaciones, asistencia y exportación a PDF/Excel/Word.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#1e1b4b",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

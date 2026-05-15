@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Teacher Grading Book</title>
+
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#1e1b4b">
+    <link rel="icon" sizes="192x192" href="./icons/icon-192.png">
+
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf-autotable@3.5.28/dist/jspdf.plugin.autotable.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --ink: #0f0e17;
+            --ink-2: #2e2b5f;
+            --surface: #f5f4ff;
+            --card: #ffffff;
+            --accent: #4338ca;
+            --accent-2: #7c3aed;
+            --emerald: #059669;
+            --rose: #e11d48;
+            --amber: #d97706;
+            --border: #e0dff8;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Sora', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: contain;
+            background: var(--surface);
+            color: var(--ink);
+        }
+
+        .mono { font-family: 'DM Mono', monospace; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+
+        @keyframes slide-up {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes pop {
+            0% { transform: scale(0.94); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .animate-slide-up { animation: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+        .animate-fade { animation: fade-in 0.2s ease both; }
+        .animate-pop { animation: pop 0.25s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+        .press:active { transform: scale(0.94); transition: transform 0.08s; }
+
+        /* Table styles */
+        .grade-table { border-collapse: separate; border-spacing: 0; width: 100%; }
+        .grade-table th, .grade-table td { padding: 0; }
+        .grade-table thead th {
+            background: #1e1b4b;
+            color: white;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 10px 12px;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .grade-table thead th:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 20;
+            border-radius: 0;
+            min-width: 130px;
+        }
+        .grade-table tbody tr:nth-child(even) td { background: #f8f7ff; }
+        .grade-table tbody tr:nth-child(odd) td { background: white; }
+        .grade-table tbody tr:hover td { background: #eef2ff !important; }
+        .grade-table tbody td:first-child {
+            position: sticky;
+            left: 0;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--ink-2);
+            padding: 10px 12px;
+            border-right: 2px solid var(--border);
+            min-width: 130px;
+            white-space: nowrap;
+            z-index: 5;
+        }
+        .grade-table tbody td:nth-child(even) { background: inherit; }
+        .grade-cell {
+            text-align: center;
+            padding: 4px 6px;
+            min-width: 70px;
+        }
+        .grade-input {
+            width: 52px;
+            text-align: center;
+            background: transparent;
+            border: none;
+            font-family: 'DM Mono', monospace;
+            font-size: 13px;
+            font-weight: 500;
+            outline: none;
+            padding: 4px;
+            border-radius: 6px;
+            color: #1e1b4b;
+        }
+        .grade-input:focus { background: #eef2ff; }
+        .avg-cell {
+            font-family: 'DM Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            text-align: center;
+            padding: 10px 14px;
+            position: sticky;
+            right: 0;
+            border-left: 2px solid var(--border);
+            z-index: 5;
+        }
+        .avg-pass { color: #059669; background: #ecfdf5 !important; }
+        .avg-fail { color: #e11d48; background: #fff1f2 !important; }
+        .avg-na   { color: #94a3b8; }
+
+        .points-row td { border-top: 2px dashed #c7d2fe; font-size: 10px; }
+
+        /* Stat cards */
+        .stat-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        /* Group card */
+        .group-card {
+            background: white;
+            border: 1.5px solid var(--border);
+            border-radius: 20px;
+            padding: 18px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: box-shadow 0.15s, border-color 0.15s;
+        }
+        .group-card:hover { box-shadow: 0 4px 20px rgba(67,56,202,0.12); border-color: #a5b4fc; }
+        .group-card:active { transform: scale(0.98); }
+
+        /* Header */
+        .app-header {
+            background: #1e1b4b;
+            color: white;
+            padding: 48px 20px 20px;
+        }
+
+        .tab-pill {
+            display: flex;
+            background: rgba(255,255,255,0.1);
+            border-radius: 14px;
+            padding: 4px;
+            gap: 4px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            transition: all 0.2s;
+            color: rgba(255,255,255,0.6);
+            border: none;
+            background: transparent;
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            background: white;
+            color: #1e1b4b;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .icon-btn {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.12);
+            border: none;
+            color: white;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .icon-btn:hover { background: rgba(255,255,255,0.22); }
+        .icon-btn:active { transform: scale(0.92); }
+
+        /* Modal overlay */
+        .modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(15,14,23,0.55);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+            display: flex;
+            align-items: flex-end;
+        }
+        @media (min-width: 640px) {
+            .modal-overlay { align-items: center; justify-content: center; }
+        }
+        .modal-sheet {
+            width: 100%;
+            max-width: 480px;
+            background: white;
+            border-radius: 24px 24px 0 0;
+            padding: 24px;
+        }
+        @media (min-width: 640px) {
+            .modal-sheet { border-radius: 24px; }
+        }
+
+        /* Attendance */
+        .att-btn {
+            width: 44px; height: 44px;
+            border-radius: 14px;
+            font-size: 12px; font-weight: 800;
+            border: none; cursor: pointer;
+            transition: all 0.15s;
+            background: #f1f5f9;
+            color: #94a3b8;
+        }
+        .att-btn.active-P { background: #059669; color: white; box-shadow: 0 4px 12px rgba(5,150,105,0.35); transform: scale(1.1); }
+        .att-btn.active-A { background: #e11d48; color: white; box-shadow: 0 4px 12px rgba(225,29,72,0.35); transform: scale(1.1); }
+        .att-btn.active-T { background: #d97706; color: white; box-shadow: 0 4px 12px rgba(217,119,6,0.35); transform: scale(1.1); }
+
+        /* Export menu */
+        .export-menu {
+            position: absolute; right: 0; top: calc(100% + 8px);
+            background: white; border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+            border: 1px solid var(--border);
+            width: 200px; z-index: 60;
+            overflow: hidden;
+            animation: pop 0.2s ease both;
+        }
+        .export-item {
+            width: 100%; padding: 12px 16px;
+            display: flex; align-items: center; gap: 10px;
+            font-size: 13px; font-weight: 600; color: var(--ink);
+            background: none; border: none; cursor: pointer; text-align: left;
+            transition: background 0.1s;
+        }
+        .export-item:hover { background: #f5f4ff; }
+
+        /* Progress bar */
+        .progress-bar { height: 6px; border-radius: 99px; background: #e0dff8; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
+
+        /* Notification toast */
+        .toast {
+            position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+            background: #1e1b4b; color: white;
+            padding: 10px 20px; border-radius: 12px;
+            font-size: 13px; font-weight: 600;
+            z-index: 999; pointer-events: none;
+            animation: slide-up 0.3s ease both;
+            white-space: nowrap;
+        }
+
+        .fab {
+            position: fixed; bottom: 28px; right: 20px;
+            width: 58px; height: 58px;
+            background: #4338ca;
+            border-radius: 18px;
+            border: none; color: white;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 8px 24px rgba(67,56,202,0.4);
+            cursor: pointer; z-index: 40;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .fab:active { transform: scale(0.92); box-shadow: 0 4px 12px rgba(67,56,202,0.3); }
+
+        /* Form inputs */
+        .form-input {
+            width: 100%; padding: 12px 14px;
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
+            font-family: 'Sora', sans-serif;
+            font-size: 14px; font-weight: 600;
+            color: var(--ink); background: var(--surface);
+            outline: none; transition: border-color 0.15s;
+        }
+        .form-input:focus { border-color: #4338ca; background: white; }
+
+        .form-label {
+            font-size: 10px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            color: #94a3b8; margin-bottom: 6px; display: block;
+        }
+
+        .btn-primary {
+            flex: 1; padding: 13px;
+            background: #4338ca; color: white;
+            border: none; border-radius: 12px;
+            font-family: 'Sora', sans-serif;
+            font-size: 12px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            cursor: pointer; transition: background 0.15s;
+        }
+        .btn-primary:hover { background: #3730a3; }
+        .btn-primary:active { transform: scale(0.97); }
+        .btn-primary:disabled { background: #c7d2fe; cursor: not-allowed; }
+
+        .btn-ghost {
+            flex: 1; padding: 13px;
+            background: #f1f5f9; color: #64748b;
+            border: none; border-radius: 12px;
+            font-family: 'Sora', sans-serif;
+            font-size: 12px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            cursor: pointer;
+        }
+        .btn-ghost:active { transform: scale(0.97); }
+
+        /* Points input */
+        .pts-input {
+            width: 48px; text-align: center;
+            border: 1.5px solid var(--border);
+            border-radius: 8px; padding: 4px 6px;
+            font-family: 'DM Mono', monospace;
+            font-size: 13px; font-weight: 500;
+            outline: none; background: white;
+            color: var(--ink);
+        }
+        .pts-input:focus { border-color: #4338ca; }
+
+        .cat-badge {
+            display: inline-block;
+            font-size: 9px; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            padding: 3px 8px; border-radius: 99px;
+        }
+
+        /* Activity header in table */
+        .act-header { cursor: pointer; user-select: none; }
+        .act-header:hover { background: #2d2a6e !important; }
+
+        .section-label {
+            font-size: 10px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.1em;
+            color: #94a3b8; margin-bottom: 12px;
+        }
+
+        .risk-badge {
+            font-size: 9px; font-weight: 800;
+            text-transform: uppercase; padding: 2px 7px;
+            border-radius: 99px; letter-spacing: 0.05em;
+        }
+        .risk-high { background: #fff1f2; color: #e11d48; }
+        .risk-ok   { background: #ecfdf5; color: #059669; }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    // ─── CONSTANTS ───────────────────────────────────────────────────────────────
+    const CATEGORIES = [
+        { id: 'diaria',    name: 'Diaria',     color: 'bg-blue-100 text-blue-700',    hex: '#1d4ed8' },
+        { id: 'ejercicio', name: 'Ejercicio',   color: 'bg-violet-100 text-violet-700', hex: '#6d28d9' },
+        { id: 'actividad', name: 'Actividad',   color: 'bg-emerald-100 text-emerald-700', hex: '#065f46' },
+        { id: 'examen',    name: 'Examen',      color: 'bg-rose-100 text-rose-700',    hex: '#be123c' }
+    ];
+
+    const CAT_COLORS = {
+        diaria:    { bg: '#dbeafe', text: '#1d4ed8' },
+        ejercicio: { bg: '#ede9fe', text: '#6d28d9' },
+        actividad: { bg: '#d1fae5', text: '#065f46' },
+        examen:    { bg: '#ffe4e6', text: '#be123c' },
+    };
+
+    const ATT_STATUS = {
+        P: { label: 'Presente', cls: 'active-P' },
+        A: { label: 'Ausente',  cls: 'active-A' },
+        T: { label: 'Tardanza', cls: 'active-T' }
+    };
+
+    const DEFAULT_DB = {
+        groups: [], students: [], activities: [],
+        grades: {}, attendance: {},
+        actPoints: {}   // { actId: { obtained: number, total: number } }
+    };
+
+    // ─── FORMULA: (puntos obtenidos ÷ total de puntos) × 4 + 1 ──────────────────
+    const calcGrade = (obtained, total) => {
+        if (!total || total <= 0 || obtained === '' || obtained === undefined || obtained === null) return null;
+        const o = parseFloat(obtained);
+        const t = parseFloat(total);
+        if (isNaN(o) || isNaN(t) || t === 0) return null;
+        const g = (o / t) * 4 + 1;
+        return Math.min(5, Math.max(1, g));
+    };
+
+    const fmtGrade = (v) => v === null ? '—' : v.toFixed(2);
+
+    // Student avg across all activities in a group
+    const calcStudentAvg = (sId, activities, grades, actPoints) => {
+        let sum = 0, count = 0;
+        for (const a of activities) {
+            const pts = actPoints?.[a.id];
+            const key = `${sId}_${a.id}`;
+            if (pts?.total) {
+                const obtained = grades[key];
+                const g = calcGrade(obtained, pts.total);
+                if (g !== null) { sum += g; count++; }
+            }
+        }
+        if (!count) return null;
+        return sum / count;
+    };
+
+    // ─── ICONS ───────────────────────────────────────────────────────────────────
+    const Icons = {
+        plus:   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+        back:   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
+        trash:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+        save:   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>,
+        upload: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+        download:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+        close:  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+        edit:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+        restore:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.91L1 10"/></svg>,
+        students:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+        chart:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+    };
+
+    // ─── TOAST ───────────────────────────────────────────────────────────────────
+    function Toast({ msg, onDone }) {
+        useEffect(() => { const t = setTimeout(onDone, 2000); return () => clearTimeout(t); }, []);
+        return <div className="toast">{msg}</div>;
+    }
+
+    // ─── ATTENDANCE SUMMARY ───────────────────────────────────────────────────────
+    function AttSummary({ students, attendance }) {
+        if (!students.length) return null;
+
+        const allDates = [...new Set(
+            Object.keys(attendance).map(k => k.split('_')[1]).filter(Boolean)
+        )].sort();
+
+        if (!allDates.length) return (
+            <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                Sin registros de asistencia aún.<br/>Usa la pestaña Asistencia para registrar.
+            </div>
+        );
+
+        return (
+            <div style={{ padding: '0 4px' }}>
+                <p className="section-label" style={{ marginBottom: 16 }}>
+                    Resumen — {allDates.length} días registrados
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {students.map(s => {
+                        let P = 0, A = 0, T = 0;
+                        allDates.forEach(d => {
+                            const v = attendance[`${s.id}_${d}`];
+                            if (v === 'P') P++;
+                            else if (v === 'A') A++;
+                            else if (v === 'T') T++;
+                        });
+                        const total = allDates.length;
+                        const attPct = total ? Math.round(((P + T) / total) * 100) : 100;
+                        const atRisk = attPct < 80;
+
+                        return (
+                            <div key={s.id} style={{
+                                background: 'white', borderRadius: 14,
+                                padding: '14px 16px', border: '1.5px solid #e0dff8'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#1e1b4b' }}>{s.name}</span>
+                                    <span className={`risk-badge ${atRisk ? 'risk-high' : 'risk-ok'}`}>
+                                        {attPct}% asistencia
+                                    </span>
+                                </div>
+                                <div className="progress-bar">
+                                    <div className="progress-fill" style={{
+                                        width: `${attPct}%`,
+                                        background: atRisk ? '#e11d48' : '#059669'
+                                    }}/>
+                                </div>
+                                <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                                    {[['P','✓ Presentes','#059669','#ecfdf5'],['T','⚠ Tardanzas','#d97706','#fef3c7'],['A','✗ Ausencias','#e11d48','#fff1f2']].map(([key, label, color, bg]) => {
+                                        const count = key === 'P' ? P : key === 'T' ? T : A;
+                                        return (
+                                            <span key={key} style={{
+                                                fontSize: 10, fontWeight: 700, padding: '3px 8px',
+                                                borderRadius: 99, background: bg, color
+                                            }}>{label}: {count}</span>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    }
+
+    // ─── GRADES TABLE ─────────────────────────────────────────────────────────────
+    function GradesTable({ students, activities, grades, actPoints, onGradeChange, onPointsChange, onDeleteActivity, onEditActivity }) {
+        if (!students.length) return (
+            <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                Sin estudiantes en este grupo todavía.
+            </div>
+        );
+
+        return (
+            <div style={{ overflowX: 'auto', borderRadius: 16, border: '1.5px solid #e0dff8', background: 'white' }}>
+                <table className="grade-table">
+                    <thead>
+                        <tr>
+                            <th style={{ background: '#1e1b4b', textAlign: 'left' }}>Estudiante</th>
+                            {activities.map(a => {
+                                const cat = CAT_COLORS[a.category] || CAT_COLORS.diaria;
+                                return (
+                                    <th key={a.id} className="act-header" style={{ background: '#1e1b4b', textAlign: 'center' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                            <span style={{
+                                                fontSize: 8, padding: '1px 6px', borderRadius: 99,
+                                                background: cat.bg, color: cat.text, fontWeight: 800
+                                            }}>{a.category}</span>
+                                            <span style={{ fontWeight: 700, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }} title={a.name}>{a.name.length > 10 ? a.name.slice(0,10)+'…' : a.name}</span>
+                                            <button
+                                                onClick={() => onDeleteActivity(a.id)}
+                                                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'rgba(255,255,255,0.5)', borderRadius: 6, padding: '1px 6px', fontSize: 9, cursor: 'pointer', marginTop: 2 }}
+                                                title="Eliminar actividad"
+                                            >✕ eliminar</button>
+                                        </div>
+                                    </th>
+                                );
+                            })}
+                            {activities.length > 0 && (
+                                <th style={{ background: '#1e1b4b', textAlign: 'center', position: 'sticky', right: 0 }}>
+                                    PROM
+                                </th>
+                            )}
+                        </tr>
+                        {/* Points row */}
+                        {activities.length > 0 && (
+                            <tr style={{ background: '#2d2a6e' }}>
+                                <th style={{ background: '#2d2a6e', fontSize: 9, color: '#a5b4fc', textAlign: 'left', padding: '6px 12px' }}>
+                                    Pts obtenidos / total
+                                </th>
+                                {activities.map(a => {
+                                    const pts = actPoints?.[a.id] || {};
+                                    return (
+                                        <th key={a.id} style={{ background: '#2d2a6e', textAlign: 'center', padding: '4px 6px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                                                <span style={{ color: '#c7d2fe', fontSize: 10 }}>Total:</span>
+                                                <input
+                                                    type="number" min="1" className="pts-input"
+                                                    style={{ width: 44, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'white' }}
+                                                    value={pts.total ?? ''}
+                                                    placeholder="100"
+                                                    onChange={e => onPointsChange(a.id, 'total', e.target.value)}
+                                                    title="Puntos totales de la actividad"
+                                                />
+                                            </div>
+                                        </th>
+                                    );
+                                })}
+                                <th style={{ background: '#2d2a6e', position: 'sticky', right: 0 }}></th>
+                            </tr>
+                        )}
+                    </thead>
+                    <tbody>
+                        {students.map(s => {
+                            const avg = calcStudentAvg(s.id, activities, grades, actPoints);
+                            const avgPass = avg !== null && avg >= 3;
+                            return (
+                                <tr key={s.id}>
+                                    <td>{s.name}</td>
+                                    {activities.map(a => {
+                                        const pts = actPoints?.[a.id] || {};
+                                        const key = `${s.id}_${a.id}`;
+                                        const obtained = grades[key];
+                                        const computed = calcGrade(obtained, pts.total);
+                                        return (
+                                            <td key={a.id} className="grade-cell">
+                                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                                                    <input
+                                                        type="number" step="0.5" min="0"
+                                                        className="grade-input"
+                                                        value={obtained ?? ''}
+                                                        placeholder="—"
+                                                        onChange={e => onGradeChange(s.id, a.id, e.target.value)}
+                                                        title={pts.total ? `Nota: ${fmtGrade(computed)}` : 'Define los puntos totales primero'}
+                                                    />
+                                                    {computed !== null && (
+                                                        <span style={{
+                                                            fontSize: 9, fontFamily: 'DM Mono, monospace', fontWeight: 700,
+                                                            color: computed >= 3 ? '#059669' : '#e11d48'
+                                                        }}>{fmtGrade(computed)}</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        );
+                                    })}
+                                    {activities.length > 0 && (
+                                        <td className={`avg-cell ${avg === null ? 'avg-na' : avgPass ? 'avg-pass' : 'avg-fail'}`}>
+                                            {avg === null ? '—' : avg.toFixed(2)}
+                                        </td>
+                                    )}
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        );
+    }
+
+    // ─── MAIN APP ────────────────────────────────────────────────────────────────
+    function App() {
+        const [data, setData] = useState(() => {
+            try {
+                const saved = localStorage.getItem('TP_MASTER_DB_v2');
+                if (saved) return { ...DEFAULT_DB, ...JSON.parse(saved) };
+            } catch {}
+            // Try migrating from old key
+            try {
+                const old = localStorage.getItem('TP_MASTER_DB');
+                if (old) return { ...DEFAULT_DB, ...JSON.parse(old) };
+            } catch {}
+            return DEFAULT_DB;
+        });
+
+        const [view, setView] = useState('groups');
+        const [tab, setTab] = useState('grades');
+        const [selectedGroupId, setSelectedGroupId] = useState(null);
+        const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+        const [modal, setModal] = useState(null); // null | { type, payload? }
+        const [inputValue, setInputValue] = useState('');
+        const [input2, setInput2] = useState(''); // secondary input
+        const [selectedCat, setSelectedCat] = useState('diaria');
+        const [actPtsInput, setActPtsInput] = useState('');
+        const [showExportMenu, setShowExportMenu] = useState(false);
+        const [toast, setToast] = useState(null);
+        const exportMenuRef = useRef(null);
+        const fileInputRef = useRef(null);
+        const restoreInputRef = useRef(null);
+
+        // Auto-save
+        useEffect(() => {
+            try { localStorage.setItem('TP_MASTER_DB_v2', JSON.stringify(data)); } catch {}
+        }, [data]);
+
+        // Close export menu on outside click
+        useEffect(() => {
+            const h = e => { if (exportMenuRef.current && !exportMenuRef.current.contains(e.target)) setShowExportMenu(false); };
+            document.addEventListener('mousedown', h);
+            return () => document.removeEventListener('mousedown', h);
+        }, []);
+
+        const showToast = (msg) => { setToast(msg); };
+
+        // Derived
+        const activeGroup = data.groups.find(g => g.id === selectedGroupId);
+        const groupStudents = data.students.filter(s => s.groupId === selectedGroupId).sort((a, b) => a.name.localeCompare(b.name));
+        const groupActivities = data.activities.filter(a => a.groupId === selectedGroupId);
+
+        // ── CRUD ──────────────────────────────────────────────────────────────────
+        const addGroup = () => {
+            const name = inputValue.trim();
+            if (!name) return;
+            setData(prev => ({ ...prev, groups: [...prev.groups, { id: 'g' + Date.now(), name }] }));
+            closeModal(); showToast('Grupo creado');
+        };
+
+        const addStudent = () => {
+            const name = inputValue.trim();
+            if (!name || !selectedGroupId) return;
+            setData(prev => ({ ...prev, students: [...prev.students, { id: 's' + Date.now(), name, groupId: selectedGroupId }] }));
+            setInputValue(''); showToast('Estudiante agregado');
+            // Keep modal open to add more
+        };
+
+        const addActivity = () => {
+            const name = inputValue.trim();
+            if (!name || !selectedGroupId) return;
+            const id = 'a' + Date.now();
+            setData(prev => ({
+                ...prev,
+                activities: [...prev.activities, { id, name, groupId: selectedGroupId, category: selectedCat }],
+                actPoints: { ...prev.actPoints, [id]: { total: actPtsInput ? Number(actPtsInput) : null } }
+            }));
+            closeModal(); showToast('Actividad creada');
+        };
+
+        const deleteGroup = (gId) => {
+            if (!confirm('¿Eliminar grupo y todos sus datos?')) return;
+            setData(prev => {
+                const studentIds = prev.students.filter(s => s.groupId === gId).map(s => s.id);
+                const actIds = prev.activities.filter(a => a.groupId === gId).map(a => a.id);
+                const newGrades = { ...prev.grades };
+                const newAtt = { ...prev.attendance };
+                const newPts = { ...prev.actPoints };
+                studentIds.forEach(sId => {
+                    Object.keys(newGrades).filter(k => k.startsWith(sId + '_')).forEach(k => delete newGrades[k]);
+                    Object.keys(newAtt).filter(k => k.startsWith(sId + '_')).forEach(k => delete newAtt[k]);
+                });
+                actIds.forEach(aId => delete newPts[aId]);
+                return {
+                    ...prev,
+                    groups: prev.groups.filter(g => g.id !== gId),
+                    students: prev.students.filter(s => s.groupId !== gId),
+                    activities: prev.activities.filter(a => a.groupId !== gId),
+                    grades: newGrades, attendance: newAtt, actPoints: newPts
+                };
+            });
+        };
+
+        const deleteStudent = (sId) => {
+            if (!confirm('¿Eliminar estudiante?')) return;
+            setData(prev => {
+                const newGrades = Object.fromEntries(Object.entries(prev.grades).filter(([k]) => !k.startsWith(sId + '_')));
+                const newAtt = Object.fromEntries(Object.entries(prev.attendance).filter(([k]) => !k.startsWith(sId + '_')));
+                return { ...prev, students: prev.students.filter(s => s.id !== sId), grades: newGrades, attendance: newAtt };
+            });
+        };
+
+        const deleteActivity = (aId) => {
+            if (!confirm('¿Eliminar actividad y sus calificaciones?')) return;
+            setData(prev => {
+                const newGrades = Object.fromEntries(Object.entries(prev.grades).filter(([k]) => !k.endsWith('_' + aId)));
+                const newPts = { ...prev.actPoints };
+                delete newPts[aId];
+                return { ...prev, activities: prev.activities.filter(a => a.id !== aId), grades: newGrades, actPoints: newPts };
+            });
+        };
+
+        const editName = () => {
+            const name = inputValue.trim();
+            if (!name || !modal?.payload) return;
+            const { kind, id } = modal.payload;
+            setData(prev => ({
+                ...prev,
+                [kind]: prev[kind].map(item => item.id === id ? { ...item, name } : item)
+            }));
+            closeModal(); showToast('Nombre actualizado');
+        };
+
+        const updateGrade = (sId, aId, val) => {
+            const raw = (val ?? '').toString().trim();
+            setData(prev => ({
+                ...prev,
+                grades: { ...prev.grades, [`${sId}_${aId}`]: raw === '' ? undefined : Number(raw) }
+            }));
+        };
+
+        const updatePoints = (aId, field, val) => {
+            setData(prev => ({
+                ...prev,
+                actPoints: {
+                    ...prev.actPoints,
+                    [aId]: { ...(prev.actPoints?.[aId] || {}), [field]: val === '' ? null : Number(val) }
+                }
+            }));
+        };
+
+        const setAtt = (sId, status) => {
+            const key = `${sId}_${selectedDate}`;
+            setData(prev => ({
+                ...prev,
+                attendance: { ...prev.attendance, [key]: prev.attendance[key] === status ? undefined : status }
+            }));
+        };
+
+        const closeModal = () => { setModal(null); setInputValue(''); setInput2(''); setActPtsInput(''); };
+
+        // ── IMPORT ────────────────────────────────────────────────────────────────
+        const importStudentList = (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const lines = ev.target.result.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                if (!lines.length) return alert('Archivo vacío');
+                const now = Date.now();
+                const newStudents = lines.map((name, i) => ({
+                    id: 's' + now + '_' + i, name, groupId: selectedGroupId
+                }));
+                setData(prev => ({ ...prev, students: [...prev.students, ...newStudents] }));
+                showToast(`${lines.length} estudiantes importados`);
+                e.target.value = null;
+            };
+            reader.readAsText(file);
+        };
+
+        const restoreBackup = (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                try {
+                    const parsed = JSON.parse(ev.target.result);
+                    if (!parsed.groups) throw new Error('Formato inválido');
+                    if (!confirm(`¿Restaurar respaldo? Esto reemplazará todos los datos actuales.`)) return;
+                    setData({ ...DEFAULT_DB, ...parsed });
+                    showToast('Respaldo restaurado');
+                } catch {
+                    alert('Archivo de respaldo inválido.');
+                }
+                e.target.value = null;
+            };
+            reader.readAsText(file);
+        };
+
+        // ── BACKUP ───────────────────────────────────────────────────────────────
+        const handleBackup = () => {
+            const blob = new Blob([JSON.stringify({ ...data, _version: '2.0', _date: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Respaldo_TeacherPanama_${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Respaldo descargado');
+        };
+
+        // ── EXPORTS ──────────────────────────────────────────────────────────────
+        const exportToPDF = () => {
+            setShowExportMenu(false);
+            if (!selectedGroupId) return;
+            const group = activeGroup;
+            const students = groupStudents;
+            const activities = groupActivities;
+            if (!students.length) return alert('No hay estudiantes en este grupo.');
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            doc.setFontSize(18); doc.setTextColor(30, 27, 75);
+            doc.text(`Reporte: ${group?.name || 'Grupo'}`, 14, 16);
+            doc.setFontSize(10); doc.setTextColor(100);
+            doc.text(`Generado: ${new Date().toLocaleDateString()} — ${students.length} estudiantes`, 14, 23);
+
+            if (activities.length > 0) {
+                const headers = ['Estudiante', ...activities.map(a => a.name.slice(0,14)), 'Promedio'];
+                const rows = students.map(s => {
+                    const row = [s.name.slice(0,22)];
+                    activities.forEach(a => {
+                        const pts = data.actPoints?.[a.id];
+                        const obtained = data.grades[`${s.id}_${a.id}`];
+                        const g = calcGrade(obtained, pts?.total);
+                        row.push(g !== null ? fmtGrade(g) : '—');
+                    });
+                    const avg = calcStudentAvg(s.id, activities, data.grades, data.actPoints);
+                    row.push(avg !== null ? avg.toFixed(2) : '—');
+                    return row;
+                });
+                doc.autoTable({ head: [headers], body: rows, startY: 30, theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 2 },
+                    headStyles: { fillColor: [30, 27, 75], textColor: 255 },
+                    margin: { left: 10, right: 10 }
+                });
+            }
+
+            const attDates = [...new Set(Object.keys(data.attendance).map(k => k.split('_')[1]).filter(Boolean))].sort().slice(-7);
+            if (attDates.length) {
+                doc.addPage();
+                doc.setFontSize(14); doc.setTextColor(30,27,75);
+                doc.text('Asistencia (últimas 7 fechas)', 14, 16);
+                const attHeaders = ['Estudiante', ...attDates.map(d => new Date(d + 'T12:00').toLocaleDateString('es-PA', { month: 'short', day: 'numeric' }))];
+                const attRows = students.map(s => [s.name.slice(0,22), ...attDates.map(d => data.attendance[`${s.id}_${d}`] || '—')]);
+                doc.autoTable({ head: [attHeaders], body: attRows, startY: 24, theme: 'grid',
+                    styles: { fontSize: 8, cellPadding: 2 },
+                    headStyles: { fillColor: [5, 150, 105], textColor: 255 },
+                    margin: { left: 10, right: 10 }
+                });
+            }
+
+            doc.save(`Reporte_${(group?.name || 'Grupo').replace(/[^a-z0-9]/gi,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+            showToast('PDF exportado');
+        };
+
+        const exportToExcel = () => {
+            setShowExportMenu(false);
+            if (!groupStudents.length) return alert('No hay estudiantes.');
+            const students = groupStudents;
+            const activities = groupActivities;
+            const wb = XLSX.utils.book_new();
+
+            // Grades sheet
+            const gradeHeaders = ['Estudiante', ...activities.map(a => a.name), 'Promedio (fórmula)'];
+            const gradeRows = students.map(s => {
+                const row = [s.name];
+                activities.forEach(a => {
+                    const pts = data.actPoints?.[a.id];
+                    const obtained = data.grades[`${s.id}_${a.id}`];
+                    const g = calcGrade(obtained, pts?.total);
+                    row.push(g !== null ? parseFloat(fmtGrade(g)) : '');
+                });
+                const avg = calcStudentAvg(s.id, activities, data.grades, data.actPoints);
+                row.push(avg !== null ? parseFloat(avg.toFixed(2)) : '');
+                return row;
+            });
+            const ws = XLSX.utils.aoa_to_sheet([gradeHeaders, ...gradeRows]);
+            ws['!cols'] = gradeHeaders.map((_, i) => ({ wch: i === 0 ? 28 : 16 }));
+            XLSX.utils.book_append_sheet(wb, ws, 'Calificaciones');
+
+            // Attendance
+            const attDates = [...new Set(Object.keys(data.attendance).map(k => k.split('_')[1]).filter(Boolean))].sort();
+            if (attDates.length) {
+                const attHeaders = ['Estudiante', ...attDates.map(d => new Date(d+'T12:00').toLocaleDateString())];
+                const attRows = students.map(s => [s.name, ...attDates.map(d => data.attendance[`${s.id}_${d}`] || '')]);
+                const wsA = XLSX.utils.aoa_to_sheet([attHeaders, ...attRows]);
+                wsA['!cols'] = attHeaders.map((_, i) => ({ wch: i === 0 ? 28 : 12 }));
+                XLSX.utils.book_append_sheet(wb, wsA, 'Asistencia');
+            }
+
+            XLSX.writeFile(wb, `Reporte_${(activeGroup?.name||'Grupo').replace(/[^a-z0-9]/gi,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
+            showToast('Excel exportado');
+        };
+
+        const exportToWord = () => {
+            setShowExportMenu(false);
+            const students = groupStudents;
+            const activities = groupActivities;
+            if (!students.length) return alert('No hay estudiantes.');
+
+            const gradeRows = students.map(s => {
+                const cells = activities.map(a => {
+                    const pts = data.actPoints?.[a.id];
+                    const obtained = data.grades[`${s.id}_${a.id}`];
+                    const g = calcGrade(obtained, pts?.total);
+                    return `<td style="text-align:center">${g !== null ? fmtGrade(g) : '—'}</td>`;
+                }).join('');
+                const avg = calcStudentAvg(s.id, activities, data.grades, data.actPoints);
+                return `<tr><td>${s.name}</td>${cells}<td><strong>${avg !== null ? avg.toFixed(2) : '—'}</strong></td></tr>`;
+            }).join('');
+
+            const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+                body{font-family:Arial;margin:40px}h1{color:#1e1b4b}
+                table{border-collapse:collapse;width:100%;margin:20px 0}
+                th,td{border:1px solid #d1d5db;padding:8px 10px;font-size:12px}
+                th{background:#1e1b4b;color:white}
+                tr:nth-child(even){background:#f9fafb}
+                </style></head><body>
+                <h1>Reporte: ${activeGroup?.name || 'Grupo'}</h1>
+                <p>Fecha: ${new Date().toLocaleDateString()} | Estudiantes: ${students.length}</p>
+                <h2>Calificaciones <small style="font-size:11px;color:#6b7280">(fórmula: (pts ÷ total) × 4 + 1)</small></h2>
+                <table><tr><th>Estudiante</th>${activities.map(a=>`<th>${a.name}</th>`).join('')}<th>Promedio</th></tr>
+                ${gradeRows}</table>
+                <p style="font-size:11px;color:#6b7280;margin-top:30px">Generado por Teacher Grading Book — ${new Date().toLocaleString()}</p>
+                </body></html>`;
+
+            const blob = new Blob([html], { type: 'application/msword' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Reporte_${(activeGroup?.name||'Grupo').replace(/[^a-z0-9]/gi,'_')}_${new Date().toISOString().slice(0,10)}.doc`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Word exportado');
+        };
+
+        // ── RENDER ────────────────────────────────────────────────────────────────
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: 480, margin: '0 auto', background: '#f5f4ff', position: 'relative', overflow: 'hidden' }}>
+
+                {/* HEADER */}
+                <div className="app-header">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: view !== 'groups' ? 16 : 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            {view !== 'groups' && (
+                                <button className="icon-btn" onClick={() => setView('groups')} aria-label="Volver">
+                                    {Icons.back}
+                                </button>
+                            )}
+                            <div>
+                                <h1 style={{ fontSize: view === 'groups' ? 22 : 18, fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.02em' }}>
+                                    {view === 'groups' ? 'Teacher Grading Book' : activeGroup?.name}
+                                </h1>
+                                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', fontWeight: 600, marginTop: 2, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                    {view === 'groups'
+                                        ? `${data.groups.length} grupos · datos locales`
+                                        : `${groupStudents.length} estudiantes · ${groupActivities.length} actividades`}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            {view !== 'groups' && (
+                                <div style={{ position: 'relative' }} ref={exportMenuRef}>
+                                    <button className="icon-btn" onClick={() => setShowExportMenu(v => !v)} aria-label="Exportar">
+                                        {Icons.download}
+                                    </button>
+                                    {showExportMenu && (
+                                        <div className="export-menu">
+                                            <button className="export-item" onClick={exportToPDF}>📄 Exportar PDF</button>
+                                            <button className="export-item" onClick={exportToExcel}>📊 Exportar Excel</button>
+                                            <button className="export-item" onClick={exportToWord}>📝 Exportar Word</button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {view !== 'groups' && (
+                                <button className="icon-btn" onClick={() => fileInputRef.current?.click()} aria-label="Importar lista">
+                                    {Icons.upload}
+                                    <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".txt,.csv" onChange={importStudentList} />
+                                </button>
+                            )}
+                            <button className="icon-btn" onClick={handleBackup} aria-label="Respaldo" title="Descargar respaldo JSON">
+                                {Icons.save}
+                            </button>
+                            <button className="icon-btn" onClick={() => restoreInputRef.current?.click()} aria-label="Restaurar respaldo" title="Restaurar desde respaldo JSON">
+                                {Icons.restore}
+                                <input type="file" ref={restoreInputRef} style={{ display: 'none' }} accept=".json" onChange={restoreBackup} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {view !== 'groups' && (
+                        <div className="tab-pill">
+                            <button className={`tab-btn ${tab === 'grades' ? 'active' : ''}`} onClick={() => setTab('grades')}>Calificaciones</button>
+                            <button className={`tab-btn ${tab === 'attendance' ? 'active' : ''}`} onClick={() => setTab('attendance')}>Asistencia</button>
+                            <button className={`tab-btn ${tab === 'summary' ? 'active' : ''}`} onClick={() => setTab('summary')}>Resumen</button>
+                        </div>
+                    )}
+                </div>
+
+                {/* MAIN CONTENT */}
+                <main style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 100 }} className="no-scrollbar">
+
+                    {/* GROUPS VIEW */}
+                    {view === 'groups' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                            {data.groups.length === 0 && (
+                                <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, marginTop: 48 }}>
+                                    <div style={{ fontSize: 36, marginBottom: 12 }}>📚</div>
+                                    Crea tu primer grupo con el botón (+)
+                                </div>
+                            )}
+                            {data.groups.map(g => {
+                                const count = data.students.filter(s => s.groupId === g.id).length;
+                                const acts = data.activities.filter(a => a.groupId === g.id).length;
+                                return (
+                                    <div key={g.id} className="group-card animate-pop" onClick={() => { setSelectedGroupId(g.id); setView('detail'); }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                            <div style={{
+                                                width: 50, height: 50, borderRadius: 16,
+                                                background: '#f0eeff', color: '#4338ca',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                fontSize: 20, fontWeight: 800
+                                            }}>{g.name[0]?.toUpperCase()}</div>
+                                            <div>
+                                                <p style={{ fontWeight: 700, fontSize: 15, color: '#1e1b4b', marginBottom: 2 }}>{g.name}</p>
+                                                <p style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                                    {count} estudiantes · {acts} actividades
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); setModal({ type: 'editName', payload: { kind: 'groups', id: g.id, current: g.name } }); setInputValue(g.name); }}
+                                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 4 }}
+                                                aria-label="Editar nombre"
+                                            >{Icons.edit}</button>
+                                            <button
+                                                onClick={e => { e.stopPropagation(); deleteGroup(g.id); }}
+                                                style={{ background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', padding: 4 }}
+                                                aria-label="Eliminar"
+                                            >{Icons.trash}</button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* DETAIL VIEW — GRADES */}
+                    {view === 'detail' && tab === 'grades' && (
+                        <div>
+                            {groupActivities.length === 0 && groupStudents.length > 0 && (
+                                <div style={{ background: '#eef2ff', borderRadius: 14, padding: '14px 16px', marginBottom: 16, fontSize: 12, color: '#4338ca', fontWeight: 600 }}>
+                                    💡 Crea una actividad con (+) para empezar a calificar. Define los puntos totales en la tabla.
+                                </div>
+                            )}
+                            <GradesTable
+                                students={groupStudents}
+                                activities={groupActivities}
+                                grades={data.grades}
+                                actPoints={data.actPoints}
+                                onGradeChange={updateGrade}
+                                onPointsChange={updatePoints}
+                                onDeleteActivity={deleteActivity}
+                                onEditActivity={() => {}}
+                            />
+                            {/* Students list below table */}
+                            {groupStudents.length > 0 && (
+                                <div style={{ marginTop: 20 }}>
+                                    <p className="section-label">Estudiantes</p>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        {groupStudents.map(s => {
+                                            const avg = calcStudentAvg(s.id, groupActivities, data.grades, data.actPoints);
+                                            return (
+                                                <div key={s.id} style={{
+                                                    background: 'white', borderRadius: 12, padding: '10px 14px',
+                                                    border: '1.5px solid #e0dff8', display: 'flex',
+                                                    justifyContent: 'space-between', alignItems: 'center'
+                                                }}>
+                                                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                                                        <button onClick={() => { setModal({ type: 'editName', payload: { kind: 'students', id: s.id, current: s.name } }); setInputValue(s.name); }}
+                                                            style={{ background: 'none', border: 'none', color: '#c7d2fe', cursor: 'pointer', padding: 0 }}>{Icons.edit}</button>
+                                                        <span style={{ fontSize: 12, fontWeight: 700, color: '#1e1b4b' }}>{s.name}</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        {avg !== null && (
+                                                            <span style={{
+                                                                fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700,
+                                                                color: avg >= 3 ? '#059669' : '#e11d48',
+                                                                background: avg >= 3 ? '#ecfdf5' : '#fff1f2',
+                                                                padding: '2px 8px', borderRadius: 99
+                                                            }}>{avg.toFixed(2)}</span>
+                                                        )}
+                                                        <button onClick={() => deleteStudent(s.id)}
+                                                            style={{ background: 'none', border: 'none', color: '#fca5a5', cursor: 'pointer', padding: 0 }}>{Icons.trash}</button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* DETAIL VIEW — ATTENDANCE */}
+                    {view === 'detail' && tab === 'attendance' && (
+                        <div>
+                            <div style={{ background: 'white', borderRadius: 14, padding: '12px 16px', marginBottom: 14, border: '1.5px solid #e0dff8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#94a3b8' }}>Fecha</span>
+                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                                    style={{ fontFamily: 'Sora, sans-serif', fontSize: 13, fontWeight: 700, color: '#4338ca', border: 'none', outline: 'none', background: 'transparent', cursor: 'pointer' }} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {groupStudents.map(s => (
+                                    <div key={s.id} style={{
+                                        background: 'white', borderRadius: 14, padding: '12px 16px',
+                                        border: '1.5px solid #e0dff8', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                    }}>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: '#1e1b4b', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            {Object.entries(ATT_STATUS).map(([key, info]) => {
+                                                const active = data.attendance[`${s.id}_${selectedDate}`] === key;
+                                                return (
+                                                    <button key={key} className={`att-btn ${active ? info.cls : ''}`}
+                                                        onClick={() => setAtt(s.id, key)} aria-label={info.label}>{key}</button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                                {groupStudents.length === 0 && (
+                                    <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13, padding: 32 }}>
+                                        Agrega estudiantes para registrar asistencia.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* DETAIL VIEW — SUMMARY */}
+                    {view === 'detail' && tab === 'summary' && (
+                        <div>
+                            {/* Quick stats */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+                                {[
+                                    { label: 'Estudiantes', value: groupStudents.length, icon: '👥', color: '#4338ca', bg: '#eef2ff' },
+                                    { label: 'Actividades', value: groupActivities.length, icon: '📝', color: '#7c3aed', bg: '#f5f3ff' },
+                                    {
+                                        label: 'Aprobados',
+                                        value: groupStudents.filter(s => {
+                                            const avg = calcStudentAvg(s.id, groupActivities, data.grades, data.actPoints);
+                                            return avg !== null && avg >= 3;
+                                        }).length,
+                                        icon: '✅', color: '#059669', bg: '#ecfdf5'
+                                    },
+                                    {
+                                        label: 'En riesgo',
+                                        value: groupStudents.filter(s => {
+                                            const avg = calcStudentAvg(s.id, groupActivities, data.grades, data.actPoints);
+                                            return avg !== null && avg < 3;
+                                        }).length,
+                                        icon: '⚠️', color: '#e11d48', bg: '#fff1f2'
+                                    },
+                                ].map(({ label, value, icon, color, bg }) => (
+                                    <div key={label} style={{ background: bg, borderRadius: 14, padding: '14px 16px', border: `1.5px solid ${color}22` }}>
+                                        <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
+                                        <div style={{ fontSize: 22, fontWeight: 800, color, fontFamily: 'DM Mono, monospace' }}>{value}</div>
+                                        <div style={{ fontSize: 10, fontWeight: 700, color: color + 'aa', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="section-label">Asistencia por estudiante</p>
+                            <AttSummary students={groupStudents} attendance={data.attendance} />
+                        </div>
+                    )}
+                </main>
+
+                {/* FAB */}
+                <button className="fab" onClick={() => {
+                    if (view === 'groups') setModal({ type: 'group' });
+                    else if (tab === 'grades') setModal({ type: 'activity' });
+                    else setModal({ type: 'student' });
+                }} aria-label="Agregar">
+                    {Icons.plus}
+                </button>
+
+                {/* MODALS */}
+                {modal && (
+                    <div className="modal-overlay animate-fade" onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
+                        <div className="modal-sheet animate-slide-up">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#1e1b4b' }}>
+                                    {modal.type === 'group'    && 'Nuevo Grupo'}
+                                    {modal.type === 'student'  && 'Agregar Estudiante'}
+                                    {modal.type === 'activity' && 'Nueva Actividad'}
+                                    {modal.type === 'editName' && 'Editar Nombre'}
+                                </h3>
+                                <button onClick={closeModal} style={{ background: '#f1f5f9', border: 'none', borderRadius: 10, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}>
+                                    {Icons.close}
+                                </button>
+                            </div>
+
+                            <div style={{ marginBottom: 16 }}>
+                                <label className="form-label">Nombre</label>
+                                <input
+                                    className="form-input"
+                                    value={inputValue}
+                                    onChange={e => setInputValue(e.target.value)}
+                                    placeholder={
+                                        modal.type === 'group' ? 'Ej. 3°A Inglés' :
+                                        modal.type === 'student' ? 'Ej. María Gómez' :
+                                        modal.type === 'activity' ? 'Ej. Quiz 1' :
+                                        'Nuevo nombre'
+                                    }
+                                    autoFocus
+                                    onKeyDown={e => { if (e.key === 'Enter') {
+                                        if (modal.type === 'group') addGroup();
+                                        else if (modal.type === 'student') addStudent();
+                                        else if (modal.type === 'activity') addActivity();
+                                        else if (modal.type === 'editName') editName();
+                                    }}}
+                                />
+                            </div>
+
+                            {modal.type === 'activity' && (
+                                <>
+                                    <div style={{ marginBottom: 16 }}>
+                                        <label className="form-label">Categoría</label>
+                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                            {CATEGORIES.map(cat => (
+                                                <button key={cat.id} onClick={() => setSelectedCat(cat.id)}
+                                                    style={{
+                                                        padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                                                        border: '1.5px solid',
+                                                        borderColor: selectedCat === cat.id ? '#4338ca' : '#e0dff8',
+                                                        background: selectedCat === cat.id ? '#4338ca' : 'white',
+                                                        color: selectedCat === cat.id ? 'white' : '#64748b',
+                                                        cursor: 'pointer', transition: 'all 0.15s'
+                                                    }}>{cat.name}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div style={{ marginBottom: 20 }}>
+                                        <label className="form-label">Puntos totales (opcional)</label>
+                                        <input
+                                            type="number" min="1"
+                                            className="form-input"
+                                            value={actPtsInput}
+                                            onChange={e => setActPtsInput(e.target.value)}
+                                            placeholder="Ej. 100"
+                                        />
+                                        <p style={{ fontSize: 10, color: '#94a3b8', marginTop: 5, fontWeight: 600 }}>
+                                            Nota = (puntos obtenidos ÷ total) × 4 + 1
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+
+                            {modal.type === 'student' && (
+                                <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 16, fontWeight: 600 }}>
+                                    Presiona Agregar o Enter para añadir más de uno.
+                                </p>
+                            )}
+
+                            <div style={{ display: 'flex', gap: 10 }}>
+                                <button className="btn-ghost" onClick={closeModal}>Cancelar</button>
+                                <button className="btn-primary" onClick={() => {
+                                    if (modal.type === 'group') addGroup();
+                                    else if (modal.type === 'student') addStudent();
+                                    else if (modal.type === 'activity') addActivity();
+                                    else if (modal.type === 'editName') editName();
+                                }}>
+                                    {modal.type === 'editName' ? 'Guardar' : modal.type === 'student' ? 'Agregar' : 'Crear'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* TOAST */}
+                {toast && <Toast msg={toast} onDone={() => setToast(null)} />}
+            </div>
+        );
+    }
+
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+        });
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
