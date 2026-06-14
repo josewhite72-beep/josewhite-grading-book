@@ -1,5 +1,5 @@
 /* TeacherPanama Pro Service Worker - OFFLINE FIRST */
-const CACHE_VERSION = 'tp-pro-v4';
+const CACHE_VERSION = 'tp-pro-v6';
 const CACHE_NAME = `${CACHE_VERSION}-shell`;
 const CDN_CACHE_NAME = `${CACHE_VERSION}-cdn`;
 
